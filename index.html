@@ -1,0 +1,356 @@
+<html>
+
+<head>
+
+</head>
+
+
+<body>
+    <script src="https://code.jquery.com/jquery-3.5.0.min.js"></script>
+    <script>
+
+
+//*************************************
+// Usage
+// 
+// spdata is data grabbed from rapid api / yahoo finance. To update this data run the function getStocks()
+// getStocks will fetch all the s&p 500 company data, store it in a variable spdata and spit it out in a file.
+// 
+// The s&p500 json dataset can be found here https://pkgstore.datahub.io/core/s-and-p-500-companies/constituents_json/data/64dd3e9582b936b0352fdd826ecd3c95/constituents_json.json
+// and here https://datahub.io/core/s-and-p-500-companies#data
+// 
+// Execute sortAndValue() from the console to process spdata. Each company is rated based on three different
+// metrics: profit to book value, quarertly earnings, forwardEps minus trailingEps
+// The lower rating the better. Each rating is summed to give the total rating. 
+//
+// For example all s&p500 companies are sorted by profitToBookValue ratio. The number 1 company recieves 1 point
+// the number 2 company recieves 2 points and so forth.
+//
+// This is repeated for the other two metrics. It would be nice if a company excelled at all three metrics and
+// only recieved 3 points total but that's not realisitic. A low profit to book value means the company stock
+// price is under valued. If such a company also has good quarterly earnings growth and a good forward outlook
+// then it is super under valued. And that is the point of this exercise.
+// 
+// The results of the processing are spit out to the console and downloaded as a cvs file
+//
+// Enjoy!
+//*************************************
+
+
+
+        var settings = {
+            "url": "http://localhost/spdata.txt",
+            "method": "GET",
+
+        }
+
+        $.ajax(settings).done(function (response) {
+            window.response = JSON.parse(response);
+        });
+
+        var spsettings = {
+            "url": "http://localhost/sp.txt",
+            "method": "GET",
+
+        }
+
+        $.ajax(spsettings).done(function (response) {
+            window.sp = JSON.parse(response);
+        });
+
+        //highly profitable that's also down
+        window.profitable = function () {
+            p = response.filter(function (a) {
+                try {
+                    return a.defaultKeyStatistics.earningsQuarterlyGrowth.raw > 1 && a.defaultKeyStatistics["52WeekChange"].raw < -0.1
+                } catch (ex) { }
+            })
+            p = p.sort(function (a, b) { return b.defaultKeyStatistics.earningsQuarterlyGrowth.raw - a.defaultKeyStatistics.earningsQuarterlyGrowth.raw; })
+            $.each(p, function (g, h) { console.log(h.symbol) })
+        }
+
+
+        //book value less than price!
+        window.giveaway = function () {
+            p = response.filter(function (a) {
+                try {
+                    return a.defaultKeyStatistics.priceToBook.raw < 1 && a.defaultKeyStatistics["52WeekChange"].raw < -0.1 && a.defaultKeyStatistics.profitMargins.raw > 0.1 && a.defaultKeyStatistics.earningsQuarterlyGrowth.raw > 0
+                } catch (ex) { }
+            })
+            p = p.sort(function (a, b) { return a.defaultKeyStatistics.priceToBook.raw - b.defaultKeyStatistics.priceToBook.raw; })
+            $.each(p, function (g, h) { console.log(h.symbol) })
+        }
+
+        //who is the brightest
+        window.bestFuture = function () {
+            p = response.filter(function (a) {
+                try {
+                    if (typeof a.defaultKeyStatistics.forwardEps !== 'undefined' && typeof a.defaultKeyStatistics.trailingEps !== 'undefined'
+                        && a.defaultKeyStatistics.forwardEps.raw / a.defaultKeyStatistics.trailingEps.raw > 1.25 && a.defaultKeyStatistics.profitMargins.raw > 0.1 && a.defaultKeyStatistics.earningsQuarterlyGrowth.raw > 0
+                    )
+
+                        return a
+                } catch (ex) { }
+            })
+            p = p.sort(function (a, b) {
+                if (typeof a.defaultKeyStatistics.forwardEps !== 'undefined' && typeof b.defaultKeyStatistics.forwardEps !== 'undefined')
+                    return (b.defaultKeyStatistics.forwardEps.raw - b.defaultKeyStatistics.trailingEps.raw) - (a.defaultKeyStatistics.forwardEps.raw - a.defaultKeyStatistics.trailingEps.raw);
+            })
+            $.each(p, function (g, h) { console.log(h.symbol) })
+        }
+
+        //future is bright
+        window.future = function () {
+            p = response.filter(function (a) {
+                try {
+                    return a.defaultKeyStatistics.trailingEps.raw <= a.defaultKeyStatistics.forwardEps.raw
+                } catch (ex) { }
+            })
+            p = p.sort(function (a, b) { return a.defaultKeyStatistics.forwardEps.raw - b.defaultKeyStatistics.forwardEps.raw; })
+            $.each(p, function (g, h) { console.log(h.symbol) })
+        }
+
+        //future is dark
+        window.dark = function () {
+            p = response.filter(function (a) {
+                try {
+                    return a.defaultKeyStatistics.forwardEps.raw < 0
+                } catch (ex) { }
+            })
+            p = p.sort(function (a, b) { return a.defaultKeyStatistics.forwardEps.raw - b.defaultKeyStatistics.forwardEps.raw; })
+            $.each(p, function (g, h) { console.log(h.symbol) })
+        }
+
+
+
+        window.sortAndValue = function () {
+
+
+
+            bestFutureValue = [];
+            $.each(response, function (a, b) {
+                if (typeof b.defaultKeyStatistics === 'undefined') {
+                    b.defaultKeyStatistics = {};
+                }
+
+                if (typeof b !== 'undefined' && typeof b.defaultKeyStatistics !== 'undefined') {
+                    if (typeof b.defaultKeyStatistics.forwardEps === 'undefined' || typeof b.defaultKeyStatistics.forwardEps.raw === 'undefined' || typeof b.defaultKeyStatistics.trailingEps === 'undefined' || typeof b.defaultKeyStatistics.trailingEps.raw === 'undefined') {
+                        b.defaultKeyStatistics.forwardEps = {}
+                        b.defaultKeyStatistics.forwardEps.raw = -9999;
+
+                        b.defaultKeyStatistics.trailingEps = {}
+                        b.defaultKeyStatistics.trailingEps.raw = 1;
+                    }
+                    bestFutureValue.push(JSON.parse(JSON.stringify(b)))
+                }
+            })
+            bestFutureValue = bestFutureValue.sort(function (a, b) {
+                if (typeof a !== 'undefined' && typeof b !== 'undefined' && typeof a.defaultKeyStatistics !== 'undefined')
+                    return (b.defaultKeyStatistics.forwardEps.raw - b.defaultKeyStatistics.trailingEps.raw) - (a.defaultKeyStatistics.forwardEps.raw - a.defaultKeyStatistics.trailingEps.raw);
+            })
+            $.each(bestFutureValue, function (a, b) {
+                b.value = a + 1;
+            })
+
+
+            giveawayValue = [];
+            $.each(response, function (a, b) {
+                if (typeof b.defaultKeyStatistics === 'undefined') {
+                    b.defaultKeyStatistics = {};
+                }
+                if (typeof b !== 'undefined' && typeof b.defaultKeyStatistics !== 'undefined') {
+                    if (typeof b.defaultKeyStatistics.priceToBook == 'undefined' || typeof b.defaultKeyStatistics.priceToBook.raw == 'undefined') {
+                        b.defaultKeyStatistics.priceToBook = {}
+                        b.defaultKeyStatistics.priceToBook.raw = 9999;
+                    }
+                    giveawayValue.push(JSON.parse(JSON.stringify(b)))
+                }
+            })
+            giveawayValue = giveawayValue.sort(function (a, b) { return a.defaultKeyStatistics.priceToBook.raw - b.defaultKeyStatistics.priceToBook.raw; })
+            $.each(giveawayValue, function (a, b) {
+                b.value = a + 1;
+            })
+
+            profitableValue = [];
+            $.each(response, function (a, b) {
+                if (typeof b.defaultKeyStatistics === 'undefined') {
+                    b.defaultKeyStatistics = {};
+                }
+                if (typeof b !== 'undefined' && typeof b.defaultKeyStatistics !== 'undefined') {
+                    if (typeof b.defaultKeyStatistics.earningsQuarterlyGrowth == 'undefined' || typeof b.defaultKeyStatistics.earningsQuarterlyGrowth.raw == 'undefined') {
+                        b.defaultKeyStatistics.earningsQuarterlyGrowth = {}
+                        b.defaultKeyStatistics.earningsQuarterlyGrowth.raw = -9999;
+                    }
+                    if (typeof b.defaultKeyStatistics.earningsQuarterlyGrowth.raw == 'undefined') {
+                        b.defaultKeyStatistics.earningsQuarterlyGrowth.raw = -9999;
+                    }
+                    profitableValue.push(JSON.parse(JSON.stringify(b)))
+                }
+            })
+            profitableValue = profitableValue.sort(function (a, b) { return b.defaultKeyStatistics.earningsQuarterlyGrowth.raw - a.defaultKeyStatistics.earningsQuarterlyGrowth.raw; })
+            $.each(profitableValue, function (a, b) {
+                b.value = a + 1;
+            })
+            $.each(response, function (a, r) {
+                r._totalValue = 0;
+                r._profitableValue = 9999;
+                r._giveawayValue = 9999;
+                r._bestFutureValue = 9999;
+
+                $.each(profitableValue, function (a, b) {
+                    if (r.symbol == b.symbol) {
+                        r._profitableValue = b.value;
+                    }
+                })
+
+                $.each(giveawayValue, function (a, b) {
+                    if (r.symbol == b.symbol) {
+                        r._giveawayValue = b.value;
+                    }
+                })
+
+                $.each(bestFutureValue, function (a, b) {
+                    if (r.symbol == b.symbol) {
+                        r._bestFutureValue = b.value;
+                    }
+                })
+
+                r._totalValue = r._bestFutureValue + r._giveawayValue + r._profitableValue;
+            })
+
+            totalValue = response.filter(function (a) {
+                return a._totalValue > 0
+            })
+
+            totalValue = totalValue.sort(function (a, b) {
+                return a._totalValue - b._totalValue
+            })
+
+            undervalued = "";
+            header = "Symbol, Total Value, Profitable Value, Giveaway Value, Best Future Value, earningsQuarterlyGrowth, priceToBook, trailingEps, forwardEps\r\n";
+            console.log(header)
+            undervalued = undervalued + header;
+
+            $.each(totalValue, function (a, b) {
+                if (typeof b.symbol !== 'undefined' && typeof b._totalValue !== 'undefined' && typeof b._profitableValue !== 'undefined' && typeof b._giveawayValue !== 'undefined' && typeof b._bestFutureValue !== 'undefined' && typeof b.defaultKeyStatistics.earningsQuarterlyGrowth !== 'undefined' && typeof b.defaultKeyStatistics.priceToBook !== 'undefined' && typeof b.defaultKeyStatistics.trailingEps !== 'undefined' && typeof b.defaultKeyStatistics.forwardEps !== 'undefined'){
+                    var row = b.symbol + "," + b._totalValue + "," + b._profitableValue + "," + b._giveawayValue + "," + b._bestFutureValue + "," + b.defaultKeyStatistics.earningsQuarterlyGrowth.raw + "," + b.defaultKeyStatistics.priceToBook.raw + "," + b.defaultKeyStatistics.trailingEps.raw + "," + b.defaultKeyStatistics.forwardEps.raw + "\r\n";
+                    console.log(row);
+                    undervalued = undervalued + row;
+
+                }
+
+            })
+
+            download(undervalued, 'undervalued.csv', 'text/plain');
+
+
+        }
+
+        alreadyRetried = false;
+        // run this again to retry any failures
+        getStocks = function () {
+            var t = 0;
+            if (typeof spdata === 'undefined') {
+                spdata = []
+            }
+            spget = [];
+            $.each(sp, function (a, s) {
+                if (typeof spdata.find(function (a) { return a.symbol == s.Symbol }) == 'undefined') {
+                    spget.push(s);
+                }
+            })
+            spcount = spget.length;
+            $.each(spget, function (a, s) {
+                t = t + 500;
+                setTimeout(function () {
+                    spcount = spcount - 1
+                    console.log(s.Symbol);
+                    var settings = {
+                        "async": true,
+                        "crossDomain": true,
+                        "url": "https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/get-detail?region=US&lang=en&symbol=" + s.Symbol,
+                        "method": "GET",
+                        "headers": {
+                            "x-rapidapi-host": "apidojo-yahoo-finance-v1.p.rapidapi.com",
+                            "x-rapidapi-key": "notsofast"
+                        }
+                    }
+
+                    $.ajax(settings).done(function (response) {
+                        spdata.push(response)
+                    });
+
+                    if (spcount == 1) {
+                        setTimeout(function () {
+                            spdata = spdata.filter(function (a) { return typeof a.symbol !== 'undefined' })
+
+                            if (!alreadyRetried) {
+                                alreadyRetried = true;
+                                console.log("bout to retry")
+                                getStocks();
+                            }else{
+                                download(JSON.stringify(spdata), 'spdata.txt', 'text/plain');
+
+                            }
+                        }, 5000)
+
+                    }
+
+                }, t);
+
+
+            })
+
+        }
+
+        function download(strData, strFileName, strMimeType) {
+            var D = document,
+                A = arguments,
+                a = D.createElement("a"),
+                d = A[0],
+                n = A[1],
+                t = A[2] || "text/plain";
+
+            //build download link:
+            a.href = "data:" + strMimeType + "charset=utf-8," + escape(strData);
+
+
+            if (window.MSBlobBuilder) { // IE10
+                var bb = new MSBlobBuilder();
+                bb.append(strData);
+                return navigator.msSaveBlob(bb, strFileName);
+            } /* end if(window.MSBlobBuilder) */
+
+
+
+            if ('download' in a) { //FF20, CH19
+                a.setAttribute("download", n);
+                a.innerHTML = "downloading...";
+                D.body.appendChild(a);
+                setTimeout(function () {
+                    var e = D.createEvent("MouseEvents");
+                    e.initMouseEvent("click", true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+                    a.dispatchEvent(e);
+                    D.body.removeChild(a);
+                }, 66);
+                return true;
+            }; /* end if('download' in a) */
+
+
+
+            //do iframe dataURL download: (older W3)
+            var f = D.createElement("iframe");
+            D.body.appendChild(f);
+            f.src = "data:" + (A[2] ? A[2] : "application/octet-stream") + (window.btoa ? ";base64" : "") + "," + (window.btoa ? window.btoa : escape)(strData);
+            setTimeout(function () {
+                D.body.removeChild(f);
+            }, 333);
+            return true;
+        }
+
+
+    </script>
+
+</body>
+
+</html>
