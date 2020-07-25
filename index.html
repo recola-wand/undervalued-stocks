@@ -10,31 +10,31 @@
     <script>
 
 
-//*************************************
-// Usage
-// 
-// spdata is data grabbed from rapid api / yahoo finance. To update this data run the function getStocks()
-// getStocks will fetch all the s&p 500 company data, store it in a variable spdata and spit it out in a file.
-// 
-// The s&p500 json dataset can be found here https://pkgstore.datahub.io/core/s-and-p-500-companies/constituents_json/data/64dd3e9582b936b0352fdd826ecd3c95/constituents_json.json
-// and here https://datahub.io/core/s-and-p-500-companies#data
-// 
-// Execute sortAndValue() from the console to process spdata. Each company is rated based on three different
-// metrics: profit to book value, quarertly earnings, forwardEps minus trailingEps
-// The lower rating the better. Each rating is summed to give the total rating. 
-//
-// For example all s&p500 companies are sorted by profitToBookValue ratio. The number 1 company recieves 1 point
-// the number 2 company recieves 2 points and so forth.
-//
-// This is repeated for the other two metrics. It would be nice if a company excelled at all three metrics and
-// only recieved 3 points total but that's not realisitic. A low profit to book value means the company stock
-// price is under valued. If such a company also has good quarterly earnings growth and a good forward outlook
-// then it is super under valued. And that is the point of this exercise.
-// 
-// The results of the processing are spit out to the console and downloaded as a cvs file
-//
-// Enjoy!
-//*************************************
+        //*************************************
+        // Usage
+        // 
+        // spdata is data grabbed from rapid api / yahoo finance. To update this data run the function getStocks()
+        // getStocks will fetch all the s&p 500 company data, store it in a variable spdata and spit it out in a file.
+        // 
+        // The s&p500 json dataset can be found here https://pkgstore.datahub.io/core/s-and-p-500-companies/constituents_json/data/64dd3e9582b936b0352fdd826ecd3c95/constituents_json.json
+        // and here https://datahub.io/core/s-and-p-500-companies#data
+        // 
+        // Execute sortAndValue() from the console to process spdata. Each company is rated based on three different
+        // metrics: profit to book value, quarertly earnings, forwardEps minus trailingEps
+        // The lower rating the better. Each rating is summed to give the total rating. 
+        //
+        // For example all s&p500 companies are sorted by profitToBookValue ratio. The number 1 company recieves 1 point
+        // the number 2 company recieves 2 points and so forth.
+        //
+        // This is repeated for the other two metrics. It would be nice if a company excelled at all three metrics and
+        // only recieved 3 points total but that's not realisitic. A low profit to book value means the company stock
+        // price is under valued. If such a company also has good quarterly earnings growth and a good forward outlook
+        // then it is super under valued. And that is the point of this exercise.
+        // 
+        // The results of the processing are spit out to the console and downloaded as a cvs file
+        //
+        // Enjoy!
+        //*************************************
 
 
 
@@ -134,22 +134,81 @@
                 }
 
                 if (typeof b !== 'undefined' && typeof b.defaultKeyStatistics !== 'undefined') {
-                    if (typeof b.defaultKeyStatistics.forwardEps === 'undefined' || typeof b.defaultKeyStatistics.forwardEps.raw === 'undefined' || typeof b.defaultKeyStatistics.trailingEps === 'undefined' || typeof b.defaultKeyStatistics.trailingEps.raw === 'undefined') {
-                        b.defaultKeyStatistics.forwardEps = {}
-                        b.defaultKeyStatistics.forwardEps.raw = -9999;
-
-                        b.defaultKeyStatistics.trailingEps = {}
-                        b.defaultKeyStatistics.trailingEps.raw = 1;
+                    if (typeof b.defaultKeyStatistics.forwardPE === 'undefined' || typeof b.defaultKeyStatistics.forwardPE.raw === 'undefined') {
+                        b.defaultKeyStatistics.forwardPE = {}
+                        b.defaultKeyStatistics.forwardPE.raw = 9999;
                     }
+                    if (b.defaultKeyStatistics.forwardPE.raw <= 0)
+                        b.defaultKeyStatistics.forwardPE.raw = 9999;
+
                     bestFutureValue.push(JSON.parse(JSON.stringify(b)))
                 }
             })
             bestFutureValue = bestFutureValue.sort(function (a, b) {
-                if (typeof a !== 'undefined' && typeof b !== 'undefined' && typeof a.defaultKeyStatistics !== 'undefined')
-                    return (b.defaultKeyStatistics.forwardEps.raw - b.defaultKeyStatistics.trailingEps.raw) - (a.defaultKeyStatistics.forwardEps.raw - a.defaultKeyStatistics.trailingEps.raw);
+                if (typeof a !== 'undefined' && typeof b !== 'undefined' && typeof a.defaultKeyStatistics !== 'undefined' && typeof b.defaultKeyStatistics.forwardPE !== 'undefined' && typeof b.defaultKeyStatistics.forwardPE.raw !== 'undefined' && typeof a.defaultKeyStatistics.forwardPE !== 'undefined' && typeof a.defaultKeyStatistics.forwardPE.raw !== 'undefined' && typeof b.summaryDetail !== 'undefined' && typeof b.summaryDetail.regularMarketPreviousClose !== 'undefined' && typeof b.summaryDetail.regularMarketPreviousClose.raw !== 'undefined')
+                    return a.defaultKeyStatistics.forwardPE.raw - b.defaultKeyStatistics.forwardPE.raw;
             })
             $.each(bestFutureValue, function (a, b) {
                 b.value = a + 1;
+                //more severe penalty
+                if(b.defaultKeyStatistics.forwardPE.raw == 9999){
+                    b.value = 9999;
+                }
+            })
+
+
+            pegValue = [];
+            $.each(response, function (a, b) {
+                if (typeof b.defaultKeyStatistics === 'undefined') {
+                    b.defaultKeyStatistics = {};
+                }
+
+                if (typeof b !== 'undefined' && typeof b.defaultKeyStatistics !== 'undefined') {
+                    if (typeof b.defaultKeyStatistics.pegRatio === 'undefined' || typeof b.defaultKeyStatistics.pegRatio.raw === 'undefined') {
+                        b.defaultKeyStatistics.pegRatio = {}
+                        b.defaultKeyStatistics.pegRatio.raw = 9999;
+                    }
+                    if (b.defaultKeyStatistics.pegRatio.raw <= 0)
+                        b.defaultKeyStatistics.pegRatio.raw = 9999;
+
+
+                    pegValue.push(JSON.parse(JSON.stringify(b)))
+                }
+            })
+            pegValue = pegValue.sort(function (a, b) {
+                if (typeof a !== 'undefined' && typeof b !== 'undefined' && typeof a.defaultKeyStatistics !== 'undefined')
+                    return a.defaultKeyStatistics.pegRatio.raw - b.defaultKeyStatistics.pegRatio.raw;
+            })
+            $.each(pegValue, function (a, b) {
+                b.value = a + 1;
+                //more severe penalty
+                if(b.defaultKeyStatistics.pegRatio.raw == 9999){
+                    b.value = 9999;
+                }
+            })
+
+
+
+            f2WeekChange = [];
+            $.each(response, function (a, b) {
+                if (typeof b.defaultKeyStatistics === 'undefined' || typeof b.defaultKeyStatistics["52WeekChange"] === 'undefined' || typeof b.defaultKeyStatistics["52WeekChange"].raw === 'undefined') {
+                    b.defaultKeyStatistics = {};
+                    b.defaultKeyStatistics["52WeekChange"] = {};
+                    b.defaultKeyStatistics["52WeekChange"].raw = 9999 
+                }
+
+                f2WeekChange.push(JSON.parse(JSON.stringify(b)))
+
+            })
+            f2WeekChange = f2WeekChange.sort(function (a, b) {
+                    return a.defaultKeyStatistics["52WeekChange"].raw - b.defaultKeyStatistics["52WeekChange"].raw;
+            })
+            $.each(f2WeekChange, function (a, b) {
+                b.value = a + 1;
+                //more severe penalty
+                if(b.defaultKeyStatistics["52WeekChange"].raw == 9999){
+                    b.value = 9999;
+                }
             })
 
 
@@ -169,6 +228,10 @@
             giveawayValue = giveawayValue.sort(function (a, b) { return a.defaultKeyStatistics.priceToBook.raw - b.defaultKeyStatistics.priceToBook.raw; })
             $.each(giveawayValue, function (a, b) {
                 b.value = a + 1;
+                //more severe penalty
+                if(b.defaultKeyStatistics.priceToBook.raw == 9999){
+                    b.value = 9999;
+                }
             })
 
             profitableValue = [];
@@ -190,12 +253,33 @@
             profitableValue = profitableValue.sort(function (a, b) { return b.defaultKeyStatistics.earningsQuarterlyGrowth.raw - a.defaultKeyStatistics.earningsQuarterlyGrowth.raw; })
             $.each(profitableValue, function (a, b) {
                 b.value = a + 1;
+                //more severe penalty
+                if(b.defaultKeyStatistics.earningsQuarterlyGrowth.raw == -9999){
+                    b.value = 9999;
+                }
             })
+
+
+
             $.each(response, function (a, r) {
                 r._totalValue = 0;
                 r._profitableValue = 9999;
                 r._giveawayValue = 9999;
                 r._bestFutureValue = 9999;
+                r._pegRatioValue = 9999;
+                r._f2WeekChange = 9999;
+
+                $.each(f2WeekChange, function (a, b) {
+                    if (r.symbol == b.symbol) {
+                        r._f2WeekChange = b.value;
+                    }
+                })
+
+                $.each(pegValue, function (a, b) {
+                    if (r.symbol == b.symbol) {
+                        r._pegRatioValue = b.value;
+                    }
+                })
 
                 $.each(profitableValue, function (a, b) {
                     if (r.symbol == b.symbol) {
@@ -215,7 +299,7 @@
                     }
                 })
 
-                r._totalValue = r._bestFutureValue + r._giveawayValue + r._profitableValue;
+                r._totalValue = r._bestFutureValue + r._giveawayValue + r._profitableValue + r._pegRatioValue + r._f2WeekChange;
             })
 
             totalValue = response.filter(function (a) {
@@ -227,13 +311,20 @@
             })
 
             undervalued = "";
-            header = "Symbol, Total Value, Profitable Value, Giveaway Value, Best Future Value, earningsQuarterlyGrowth, priceToBook, trailingEps, forwardEps\r\n";
+            header = "Symbol, Total Value, Profitable Value, Giveaway Value, Best Future Value, earningsQuarterlyGrowth, priceToBook, forwardPE, pegRatio, 52WeekChange, marketPrice, Industry, earningsDate, recommendation\r\n";
             console.log(header)
             undervalued = undervalued + header;
 
             $.each(totalValue, function (a, b) {
-                if (typeof b.symbol !== 'undefined' && typeof b._totalValue !== 'undefined' && typeof b._profitableValue !== 'undefined' && typeof b._giveawayValue !== 'undefined' && typeof b._bestFutureValue !== 'undefined' && typeof b.defaultKeyStatistics.earningsQuarterlyGrowth !== 'undefined' && typeof b.defaultKeyStatistics.priceToBook !== 'undefined' && typeof b.defaultKeyStatistics.trailingEps !== 'undefined' && typeof b.defaultKeyStatistics.forwardEps !== 'undefined'){
-                    var row = b.symbol + "," + b._totalValue + "," + b._profitableValue + "," + b._giveawayValue + "," + b._bestFutureValue + "," + b.defaultKeyStatistics.earningsQuarterlyGrowth.raw + "," + b.defaultKeyStatistics.priceToBook.raw + "," + b.defaultKeyStatistics.trailingEps.raw + "," + b.defaultKeyStatistics.forwardEps.raw + "\r\n";
+                if (typeof b.recommendationTrend !== 'undefined' && typeof b.recommendationTrend.trend !== 'undefined' && typeof b.recommendationTrend.trend[0] !== 'undefined') {
+                    b.rec = JSON.stringify(b.recommendationTrend.trend[0]);
+                }
+                if (typeof b.earnings !== 'undefined' && typeof b.earnings.earningsChart !== 'undefined' && typeof b.earnings.earningsChart.earningsDate !== 'undefined' && typeof b.earnings.earningsChart.earningsDate[0] !== 'undefined' && typeof b.earnings.earningsChart.earningsDate[0].fmt !== 'undefined') {
+                    b.earningsDate = b.earnings.earningsChart.earningsDate[0].fmt;
+                }
+
+                if (typeof b.symbol !== 'undefined' && typeof b._totalValue !== 'undefined' && typeof b._profitableValue !== 'undefined' && typeof b._giveawayValue !== 'undefined' && typeof b._bestFutureValue !== 'undefined' && typeof b.defaultKeyStatistics.earningsQuarterlyGrowth !== 'undefined' && typeof b.defaultKeyStatistics.priceToBook !== 'undefined' && typeof b.defaultKeyStatistics.trailingEps !== 'undefined' && typeof b.defaultKeyStatistics.forwardEps !== 'undefined') {
+                    var row = b.symbol + "," + b._totalValue + "," + b._profitableValue + "," + b._giveawayValue + "," + b._bestFutureValue + "," + b.defaultKeyStatistics.earningsQuarterlyGrowth.raw + "," + b.defaultKeyStatistics.priceToBook.raw + "," + b.defaultKeyStatistics.forwardPE.raw + "," + b.defaultKeyStatistics.pegRatio.raw + "," + b.defaultKeyStatistics["52WeekChange"].raw + "," + b.summaryDetail.regularMarketPreviousClose.raw + "," + b.summaryProfile.sector + "," + b.earningsDate + "," + b.rec + "\r\n";
                     console.log(row);
                     undervalued = undervalued + row;
 
@@ -272,7 +363,7 @@
                         "method": "GET",
                         "headers": {
                             "x-rapidapi-host": "apidojo-yahoo-finance-v1.p.rapidapi.com",
-                            "x-rapidapi-key": "notsofast"
+                            "x-rapidapi-key": "7a2dd90730msh2aadd1c10a193e5p1476e6jsncb410a421497"
                         }
                     }
 
@@ -288,7 +379,7 @@
                                 alreadyRetried = true;
                                 console.log("bout to retry")
                                 getStocks();
-                            }else{
+                            } else {
                                 download(JSON.stringify(spdata), 'spdata.txt', 'text/plain');
 
                             }
